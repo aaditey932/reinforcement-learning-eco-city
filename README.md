@@ -97,19 +97,3 @@ After training, import **`TerrainCityPlanner.onnx`** from the ML-Agents results 
 | Green | `#5FC879` |
 | Road | `#9AA0A6` |
 | Energy | `#F5D949` |
-
----
-
-## Q&A pointers
-
-- **Why PPO here?** Large discrete action space + long vector observations; ML-Agents PPO with masking fits the setup well.
-- **Does random terrain each episode mean generalisation?** It **reduces overfitting to one mesh** but does not replace real-world validation — policies can still exploit quirks of the synthesised generator.
-
----
-
-## Credits
-
-![low-poly terrain preview](https://raw.githubusercontent.com/KristinLague/KristinLague.github.io/main/Images/lowPolyTerrainGIF.gif)
-
-- Terrain generation: Kristin Lague’s [`Low-Poly-Terrain-Generator`](https://github.com/KristinLague/Low-Poly-Terrain-Generator) (MIT), with **Triangle.NET** for triangulation in this project.
-- **RL:** Unity **ML-Agents** (see `requirements.txt` / package manifest for versions).
