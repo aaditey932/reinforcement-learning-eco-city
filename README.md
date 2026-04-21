@@ -14,6 +14,8 @@
 
 Step-by-step commands: [`training/README.md`](training/README.md).
 
+**What’s in Git:** `Assets/`, `Packages/`, `ProjectSettings/` (version + build scenes), [`config/`](config/ppo/TerrainCityPlanner.yaml), Python [`requirements.txt`](requirements.txt), [`training/README.md`](training/README.md), sample [`Exports/`](Exports/), and slide assets. **`Library/` is not tracked** (Unity regenerates it). **`UserSettings/`** and **ML-Agents `Timers/` JSON** are ignored as machine-local. On first open, Unity may add or rewrite additional files under `ProjectSettings/`; the editor version is pinned in `ProjectSettings/ProjectVersion.txt` (**Unity 2022.3 LTS** family — align with [`Packages/manifest.json`](Packages/manifest.json)).
+
 ---
 
 ## Why urban planning & RL?

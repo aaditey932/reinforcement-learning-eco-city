@@ -1,0 +1,9 @@
+# Python side of the Eco-City RL project.
+# Pinned to ML-Agents Release 21 (compatible with the Unity package
+# `com.unity.ml-agents@2.3.0-exp.3`). Use Python 3.9.
+mlagents==0.30.0
+mlagents-envs==0.30.0
+protobuf==3.20.3
+numpy<2
+pyyaml
+torch>=1.8.0,<2.4.0

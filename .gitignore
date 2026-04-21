@@ -205,3 +205,28 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# --- Unity / ML-Agents (generated or machine-local) ---
+# https://github.com/github/gitignore/blob/main/Unity.gitignore
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+
+# Recordings can get large
+/[Rr]ecordings/
+
+# ML-Agents runtime profiler output (regenerated in editor)
+/[Aa]ssets/ML-Agents/Timers/
+
+# Duplicate / mistaken copy in workspace
+.gitignore copy
+
+# Local Unity logs / temp
+[Ll]ogs/
+tmp/
+[Tt]errainCity_BurstDebugInformation_DoNotShip/
