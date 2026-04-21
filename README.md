@@ -6,6 +6,7 @@
 
 | Piece | What we use |
 | --- | --- |
+| **Slides** | [Google Slides deck](https://docs.google.com/presentation/d/1IwpBpNnXW4747Yx1HLHcz8JSwdsLau5sChvJ3IdvafU/edit?slide=id.p11#slide=id.p11) (opens slide 11). |
 | **Engine** | Unity (environment + visuals). |
 | **RL** | **Unity ML-Agents** — **PPO** trained with `mlagents-learn` and [`config/ppo/TerrainCityPlanner.yaml`](config/ppo/TerrainCityPlanner.yaml). |
 | **Training** | Python side launches the trainer; Unity (editor or **headless build**) runs the agent and collects rollouts. |
