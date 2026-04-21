@@ -1,133 +1,113 @@
 # Eco-City RL
 
-**Eco-City RL** learns urban zoning policies on a simulated city grid with **reinforcement learning**. The objective is to balance **livability**, **pollution**, **traffic**, and **energy** while placing zones over many steps. A central theme of the work is **reward alignment**: classic failure modes (do-nothing equilibria, “minimalist” policies that game sparse bonuses) show up even in a small grid world.
+**Eco-City RL** learns urban zoning policies on a simulated city grid with **reinforcement learning**, on **procedurally generated low-poly terrain** in **Unity**. The policy must balance **livability**, **pollution**, **traffic**, and **energy** over many steps. A useful lens on the project is **reward alignment**: pathologies like do-nothing or degenerate equilibria can appear even in a toy planner.
 
-**Stack (presentation v3):** [PPO](https://stable-baselines3.readthedocs.io/) from **Stable-Baselines3**, a custom **Gymnasium** environment, and a **Three.js** viewer for rollout visualization.
+## Stack & workflow
 
-This repo may still include **Unity / ML-Agents** bits; [`training/README.md`](training/README.md) documents that workflow if present. The **MDP, reward story, results, and alignment** sections below match the **v3 talking script** (~11 slides / ~7 min).
+| Piece | What we use |
+| --- | --- |
+| **Engine** | Unity (environment + visuals). |
+| **RL** | **Unity ML-Agents** — **PPO** trained with `mlagents-learn` and [`config/ppo/TerrainCityPlanner.yaml`](config/ppo/TerrainCityPlanner.yaml). |
+| **Training** | Python side launches the trainer; Unity (editor or **headless build**) runs the agent and collects rollouts. |
+| **Inference** | **Unity** loads the exported **ONNX** policy; zone choices are shown as coloured tiles on the terrain (`CityVisualizer`). |
+| **Terrain** | `TerrainGenerator` + optional `TerrainTuner`; **each episode can use a newly randomised terrain** (see below). |
+
+Step-by-step commands: [`training/README.md`](training/README.md).
 
 ---
 
 ## Why urban planning & RL?
 
-- Cities drive a large share of **global CO₂** and host most of the world’s population.
-- **Land-use choices** (residential vs. industry vs. roads vs. green vs. energy) **lock in** emissions, traffic, and equity outcomes for a long time.
-- Tools like **UrbanSim** can simulate outcomes **given** a layout, but they do not by themselves produce an **optimized decision policy**. **RL** fills that gap when you want a **sequential** plan: the problem is **path-dependent**, reward is **delayed**, there is no simple dataset of “optimal cities per state,” and the deliverable is a **decision rule**, not only a forward model.
+- Cities account for a large share of **global emissions** and most people live in them.
+- **Land-use** (residential, commercial, industrial, green, roads, energy) **locks in** traffic, pollution, and lifestyle for a long time.
+- Simulators can predict outcomes **given** a plan; **RL** targets a **policy** that chooses actions over time when the problem is **sequential**, **path-dependent**, and **only partly comparable** to a static “optimal layout” dataset.
 
 ---
 
-## MDP overview
+## MDP (Unity implementation)
 
-### State (804-d float32 → MLP policy)
+Defaults come from [`TerrainCityEnvironment`](Assets/Scripts/EcoCity/TerrainCityEnvironment.cs) (`gridSize`, `maxSteps`, etc.).
 
-| Component | Description |
+### Observation
+
+Flattened **ML-Agents** vector per decision:
+
+| Block | Role |
 | --- | --- |
-| **Zone grid** | **10×10** cells; each cell is a **7-D one-hot** for zone type → **700** floats. |
-| **Buildable mask** | Binary flag per cell from **terrain height** (no steep or water tiles) → **100** floats. |
-| **Global scalars** | **Population**, **pollution**, **traffic congestion**, **energy balance** — normalized (e.g. **VecNormalize**). → **4** floats. |
+| **Zone one-hot** | For each cell: **7** floats (empty + six placeable zone types) → `gridSize² × 7`. |
+| **Global metrics** | Livability, pollution, traffic, energy mismatch — **4** floats. |
+| **Zone share** | Fraction of cells per **placeable** zone type — **6** floats. |
+| **Biome encoding** | Per-cell biome band as a **normalised scalar** — `gridSize²` floats. |
 
-**Total: 804** dimensions, fed to an **MLP** policy.
+For the default **`gridSize = 12`**, that is **12×12×7 + 4 + 6 + 144 = 1162** floats. (If you change `gridSize`, `ObservationSize` updates accordingly.)
 
-### Action (35 discrete)
+### Action
 
-Structured as **cell slot × zone type**:
+Single **discrete** branch of size **`gridSize × gridSize × 6`** (default **12×12×6 = 864**). Mapping:
 
-- **index = cell_slot × 7 + zone_type**
-- **5** candidate **buildable** cells per step × **7** zone types: **empty**, residential, commercial, industrial, green, road, energy → **35** actions.
-- **Masking:** only **buildable** candidates are used each step. Without this, the agent wastes moves on invalid terrain and learning **stalls**.
+- `action = cellIndex * 6 + placeableZoneIndex`
+- `cellIndex = row * gridSize + col`
+- **Action masking** hides biome-disallowed placements and **no-op re-placements** (putting the same zone on a cell that already has it).
 
-### Transition (rule-based, deterministic)
+### Transition & terrain randomisation
 
-- **Industry** raises **pollution** each step; dense industry spikes penalties.
-- **Green** applies **mitigation** near industry — the livability vs. cleanup trade-off.
-- **Roads** interact with **traffic** from nearby residential/commercial density.
-- **Energy** zones add **supply**; residential and commercial add **demand** — co-plan power or the **energy mismatch** penalty compounds.
-- **Episode length:** **200** steps; **terrain** is **regenerated on reset**.
+- Dynamics are **rule-based** given the current terrain: `CityMetrics` scores the grid; zones interact with pollution, traffic, and energy (see codebase for full rules).
+- **Episode length:** `maxSteps` (default **400**).
+- **Random terrain each episode:** `TerrainCityEnvironment.randomTerrainEachEpisode` (default **on**) re-seeds the terrain (via `TerrainTuner` when attached), **rebuilds the mesh**, and re-samples **biome bands** so the agent does not memorise a single height field. Optional `initialTerrainSeed` keeps the **first** episode reproducible.
 
 ---
 
-## Reward (five terms — each has a “failure story”)
+## Reward
 
-Weighted sum; typical roles:
+Per-step reward is the **change** in a **weighted score** between successive metrics snapshots (**delta shaping**), so learning is not dominated by episode length when the grid is sparse:
 
-| Term | Idea |
+```text
+weighted = alpha * livability - beta * pollution - gamma * traffic - delta * energyMismatch
+R_t = weighted(t) - weighted(t-1)
+```
+
+Default weights on `TerrainCityEnvironment` / `RewardWeights`: **α=1.0, β=1.2, γ=0.7, δ=0.8** (tunable for experiments). Experiment 3 exposes **demand** and **pollution-penalty** multipliers for stress tests.
+
+---
+
+## PPO (ML-Agents)
+
+Training hyperparameters live in **`config/ppo/TerrainCityPlanner.yaml`** (e.g. PPO with **two** layers of **256** hidden units, `normalize: true`, `time_horizon` tied to the behaviour, `max_steps` budget, etc.). Behaviour name **`TerrainCityPlanner`** must match **Behavior Parameters** in Unity.
+
+---
+
+## Baselines & experiments
+
+- **Baselines** (random / greedy / heuristic): [`BaselinePolicies.cs`](Assets/Scripts/EcoCity/BaselinePolicies.cs), editor tooling under [`Assets/Scripts/EcoCity/Editor/`](Assets/Scripts/EcoCity/Editor/).
+- **Alignment-style issues** (sparse placement, reward gaming, weight sensitivity) are still worth analysing on top of this env; treat any slide-specific scalar results as **illustrative** unless tied to a logged `run-id`.
+
+---
+
+## Inference in Unity
+
+After training, import **`TerrainCityPlanner.onnx`** from the ML-Agents results folder, assign it to the bootstrapper / behavior, set **Inference Only**, and press Play — tiles show **Residential**, **Commercial**, **Industrial**, **Green**, **Road**, **Energy** on the current terrain.
+
+| Zone | Colour |
 | --- | --- |
-| **Livability** | **α × (population / 100)** — must not be capped in a way that makes “build nothing” optimal (see alignment below). |
-| **Pollution** | **−β × total emissions** — if **β** is too low vs. livability, “factory cities” win. |
-| **Traffic** | **−γ × congestion** — without it, residential packs without roads. |
-| **Energy** | **−δ × \|supply − demand\|** — forces co-planning of power with demand. |
-| **Build bonus** | **+0.01** per placed cell — breaks the **empty-grid / zero-reward** equilibrium when other terms incentivize inaction. |
-
-Designing these weights (e.g. **Experiment 2:** sustainability vs. growth) is where **growth vs. sustainability** trade-offs are explored.
-
----
-
-## PPO training setup
-
-- **Algorithm:** **PPO** with **MLP actor–critic** (e.g. two hidden layers of **64** units, **ReLU**), **categorical** head over **35** actions.
-- **VecNormalize** on observations/rewards (with a sensible **clip**, e.g. **10**) — important for **stability**; **explained variance** moving up (e.g. toward ~**0.7**) is a health signal that the critic is useful.
-- Example hyperparameters used in reporting: **lr** 3e-4, **n_steps** 2048, **batch_size** 64, **γ** 0.99, **GAE λ** 0.95, **clip** 0.2, **entropy** 0.01, **10** epochs per update; on the order of **500k** timesteps (e.g. ~**20 minutes** on a Colab **A100**).
-- **Training curve:** e.g. episode reward mean improving from very negative toward less negative (e.g. **−6k → −1.6k**) depending on reward normalization.
+| Residential | `#4FA3FF` |
+| Commercial | `#FFB84F` |
+| Industrial | `#D85B5B` |
+| Green | `#5FC879` |
+| Road | `#9AA0A6` |
+| Energy | `#F5D949` |
 
 ---
 
-## Results (indicative numbers from evaluation)
+## Q&A pointers
 
-On a **200-step** deterministic eval, order-of-magnitude story:
-
-| Agent | Typical cumulative reward |
-| --- | ---: |
-| **Random** | ~**−4,750** |
-| **Greedy** (argmax livability each step) | ~**−6,324** — worse than random; ignores pollution/traffic long term |
-| **Best hand-crafted heuristic** | ~**−1,911** |
-| **PPO** | **+21.08** — only method **above zero** in this run; large margin over baselines |
-
-**Hyperparameter sensitivity:** e.g. **lr** 1e-4 can give **+21.28** while default **3e-4** may collapse (e.g. **−265**) if updates are too aggressive; **high entropy** can crater performance (e.g. **−2,900**). Diagnostics like **high clip fraction** and **approximate KL** align with “use a smaller learning rate.”
-
-**Seeds:** e.g. across **20** seeds, top rollouts staying **positive** (**+43**, **+20**, **+7**) supports checking robustness (with caveats below).
+- **Why PPO here?** Large discrete action space + long vector observations; ML-Agents PPO with masking fits the setup well.
+- **Does random terrain each episode mean generalisation?** It **reduces overfitting to one mesh** but does not replace real-world validation — policies can still exploit quirks of the synthesised generator.
 
 ---
 
-## Alignment & failure modes (the “real story”)
-
-1. **Do-nothing Nash equilibrium** — Early runs converged to an **all-empty** grid because livability was **capped** while penalties were **unbounded**, so **zero** beat any “real” city. **Fix:** **uncap** livability appropriately and add the **build bonus** → positive reward and actual construction.
-
-2. **Minimalist policy** — After fixes, the agent may place only ~**11** cells (e.g. mostly **roads + green**), **no** residential/industry — **zero** population ⇒ **zero** pollution/traffic/energy stress; reward dominated by **build bonus** (~**+22**). **Correct under the reward**, but shows **incomplete** reward design.
-
-3. **Diagnostics before sweeps** — High **clip fraction** / **KL** foreshadowed that **lower lr** would help; sweeps matched that intuition.
-
-### Sim-to-real & gaps (honest scope)
-
-| Topic | Prototype | Real-world extension |
-| --- | --- | --- |
-| Reward | Weight sweeps (e.g. Exp. 2) | Constrained RL, reward models from stakeholders |
-| Distribution shift | e.g. **1.5×** population/emissions tests (Exp. 3) | Need stronger metrics; sparse policies may look “robust” by not reacting |
-| Equity | Global metrics only | **Pareto** / multi-objective policies per neighbourhood |
-| Observation | Full state | **Partial observability** → recurrent policies; sensor/census lag |
-| Scale | **10×10** | **Hierarchical RL**, **GNN** policies, larger grids |
-
-Politics, budgets, and legal constraints are not captured; **single-agent PPO** here is a **decision-support** core, not a full urban governance model.
-
----
-
-## Conclusion & next steps
-
-- **RL** fits **sequential multi-objective planning**; **PPO** can beat strong baselines by a large margin when rewards are workable.
-- The **most informative** artefacts are often **what the reward did** (empty → minimalist road/green) — **alignment in miniature**.
-- **Next steps:** **per-resident livability** to break minimalist optima, **hierarchical PPO** for scale, **warm-start** from heuristics, **offline RL** from real land-use data. **Reward design** is where alignment work actually lives.
-
----
-
-## Q&A (short)
-
-- **Why not DQN?** **35** discrete actions with a **high-dimensional continuous** observation — **PPO + VecNormalize** is typically more stable than tabular-style Q on this setup.
-- **Does robustness under shift mean generalization?** **Ambiguous** — could be true robustness or a **sparse** policy that barely interacts with the regime; motivates richer metrics (e.g. per-resident livability).
-- **Why didn’t tuning change much?** Multiple settings can hit the **same minimalist ceiling**; next gains are likely **reward re-specification**, not another grid search on PPO alone.
-
----
-
-## Credits & terrain visual (optional asset)
+## Credits
 
 ![low-poly terrain preview](https://raw.githubusercontent.com/KristinLague/KristinLague.github.io/main/Images/lowPolyTerrainGIF.gif)
 
-- Low-poly terrain inspiration: Kristin Lague’s [Low-Poly-Terrain-Generator](https://github.com/KristinLague/Low-Poly-Terrain-Generator) (MIT), with Triangle.NET triangulation in some Unity-based workflows.
+- Terrain generation: Kristin Lague’s [`Low-Poly-Terrain-Generator`](https://github.com/KristinLague/Low-Poly-Terrain-Generator) (MIT), with **Triangle.NET** for triangulation in this project.
+- **RL:** Unity **ML-Agents** (see `requirements.txt` / package manifest for versions).
