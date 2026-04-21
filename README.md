@@ -14,7 +14,7 @@
 
 Step-by-step commands: [`training/README.md`](training/README.md).
 
-**What’s in Git:** `Assets/`, `Packages/`, `ProjectSettings/` (version + build scenes), [`config/`](config/ppo/TerrainCityPlanner.yaml), Python [`requirements.txt`](requirements.txt), [`training/README.md`](training/README.md), sample [`Exports/`](Exports/), and slide assets. **`Library/` is not tracked** (Unity regenerates it). **`UserSettings/`** and **ML-Agents `Timers/` JSON** are ignored as machine-local. On first open, Unity may add or rewrite additional files under `ProjectSettings/`; the editor version is pinned in `ProjectSettings/ProjectVersion.txt` (**Unity 2022.3 LTS** family — align with [`Packages/manifest.json`](Packages/manifest.json)).
+**What’s in Git:** `Assets/`, `Packages/`, `ProjectSettings/` (version + build scenes), [`config/`](config/ppo/TerrainCityPlanner.yaml), Python [`requirements.txt`](requirements.txt), [`training/README.md`](training/README.md), and sample [`Exports/`](Exports/). **`Library/` is not tracked** (Unity regenerates it). **`UserSettings/`** and **ML-Agents `Timers/` JSON** are ignored as machine-local. On first open, Unity may add or rewrite additional files under `ProjectSettings/`; the editor version is pinned in `ProjectSettings/ProjectVersion.txt` (**Unity 2022.3 LTS** family — align with [`Packages/manifest.json`](Packages/manifest.json)).
 
 ---
 
@@ -81,7 +81,7 @@ Training hyperparameters live in **`config/ppo/TerrainCityPlanner.yaml`** (e.g. 
 ## Baselines & experiments
 
 - **Baselines** (random / greedy / heuristic): [`BaselinePolicies.cs`](Assets/Scripts/EcoCity/BaselinePolicies.cs), editor tooling under [`Assets/Scripts/EcoCity/Editor/`](Assets/Scripts/EcoCity/Editor/).
-- **Alignment-style issues** (sparse placement, reward gaming, weight sensitivity) are still worth analysing on top of this env; treat any slide-specific scalar results as **illustrative** unless tied to a logged `run-id`.
+- **Alignment-style issues** (sparse placement, reward gaming, weight sensitivity) are still worth analysing on top of this env; treat any informal scalar results as **illustrative** unless tied to a logged `run-id`.
 
 ---
 
