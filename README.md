@@ -28,6 +28,23 @@ Step-by-step commands: [`training/README.md`](training/README.md).
 
 ---
 
+## Literature grounding
+
+This prototype sits at the intersection of **urban systems science**, **microscopic simulation**, and **deep RL tooling**. The bullets below are not an exhaustive survey; they anchor the README’s claims in widely cited sources.
+
+| Theme | Why it matters here | Representative sources |
+| --- | --- | --- |
+| **Cities and mitigation** | Motivation: urban form and infrastructure strongly influence emissions, mobility, and resource use over long horizons. | IPCC **AR6 WG III** on mitigation in urban and settlement systems ([IPCC AR6 WGIII](https://www.ipcc.ch/report/ar6/wg3/)); UN **World Cities Report** / **SDG 11** framing for urbanization pressure ([UN-Habitat](https://unhabitat.org/)). |
+| **Land use & integrated models** | “Given a layout, what happens?” is the classic **LUTI** / operational land-use modelling question; tools forecast travel, activity, and environmental outcomes under scenarios. | Waddell et al. on **UrbanSim** as an integrated land use–transport–environment microsimulation ([UrbanSim](https://www.urbansim.com/)); broader **LUTI** surveys (e.g. Wegener, *Handbook of Regional Science*, land-use–transport interaction models). |
+| **Sequential decision-making** | Zoning unfolds over time; policies are **Markov** or **POMDP**-style decision processes with delayed consequences—standard RL formalism. | Sutton & Barto, *Reinforcement Learning: An Introduction* (MDPs, policy improvement); Puterman, *Markov Decision Processes* (formal planning under uncertainty). |
+| **On-policy deep RL for control** | **PPO** is a stable default for discrete actions with function approximation; Unity’s trainer implements this stack. | Schulman et al., “Proximal Policy Optimization Algorithms” ([arXiv:1707.06347](https://arxiv.org/abs/1707.06347)). |
+| **Embodied / engine-based training** | Training in Unity matches the **train where you simulate** pattern used in games and robotics curricula. | Juliani et al., “Unity: A General Platform for Intelligent Agents” ([arXiv:1809.02627](https://arxiv.org/abs/1809.02627)); Unity **ML-Agents** [documentation](https://github.com/Unity-Technologies/ml-agents). |
+| **Scalar rewards & safety framing** | Multi-term city scores are a **proxy objective**; degenerate policies under imperfect rewards mirror the “misspecified objective / negative side effect” discussion in AI safety. | Amodei et al., “Concrete Problems in AI Safety” ([arXiv:1606.06565](https://arxiv.org/abs/1606.06565)); Krakovna on [specification gaming](https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/); multi-objective RL surveys (e.g. Roijers et al., *JAIR* 2013, multi-objective sequential decision-making) for **Pareto** extensions beyond a single weighted sum. |
+
+**Caveat:** Real municipalities combine politics, law, and stakeholder conflict resolution—this repo is a **toy grid** for methods exploration, not a substitute for participatory planning or calibrated regional models.
+
+---
+
 ## MDP (Unity implementation)
 
 Defaults come from [`TerrainCityEnvironment`](Assets/Scripts/EcoCity/TerrainCityEnvironment.cs) (`gridSize`, `maxSteps`, etc.).
